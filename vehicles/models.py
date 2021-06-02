@@ -1,4 +1,9 @@
+from django.core.validators import FileExtensionValidator
 from django.db import models
+from django.db.models import Q
+from django.db.models.functions import datetime
+from django.db.models.signals import pre_save, post_save, post_delete
+from django.dispatch import receiver
 from model_utils.models import TimeStampedModel
 
 
@@ -43,11 +48,9 @@ class AbstractVehicle(TimeStampedModel):
 
     class Meta:
         ordering = ["vehicle_price"]
-        abstract = True
 
 
 class Bill(models.Model):
-
     title = models.CharField(
         max_length=15,
         null=False
@@ -60,13 +63,18 @@ class Bill(models.Model):
         default=0,
     )
 
+    def __str__(self):
+        return str(self.id) + " " + self.title
+
 
 class ShippingAgency(models.Model):
-
     name = models.CharField(
         null=False,
         max_length=20,
     )
+
+    def __str__(self):
+        return str(self.id) + " " + self.name
 
 
 class Service(models.Model):
@@ -89,9 +97,11 @@ class Service(models.Model):
         if not self.purpose:
             self.purpose = "General service"
 
+    def __str__(self):
+        return str(self.id)
+
 
 class Car(AbstractVehicle):
-
     is_air_conditioned = models.BooleanField(
         default=True
     )
@@ -99,26 +109,96 @@ class Car(AbstractVehicle):
         default=False
     )
     my_bills = models.ManyToManyField(
-        Bill
+        Bill,
+        blank=True
     )
+
+    # car_photo = models.FileField(
+    #     upload_to="cars_data/",
+    #     blank=True,
+    #     null=True,
+    #     validators=[
+    #         FileExtensionValidator(
+    #             allowed_extensions=["jpg", "jpeg", "png"],
+    #         ),
+    #     ],
+    # )
 
     class Meta:
         ordering = ["model_name"]
 
+    def __str__(self):
+        return str(self.id) + " " + self.model_name
+
+
+@receiver(pre_save, sender=Car)
+def my_handler(sender, **kwargs):
+    print("car about to save")
+
+
+@receiver(post_save, sender=Car)
+def my_handler(sender, **kwargs):
+    print("car saved")
+
+
+class CBook(models.Model):
+    book_number = models.IntegerField(null=True, blank=True)
+
 
 class Truck(AbstractVehicle):
-
     max_capacity = models.IntegerField(
         default=0
     )
     works_for = models.ForeignKey(
         ShippingAgency,
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        related_name="truck"
     )
     services = models.ManyToManyField(
-        Service
+        Service,
+        blank=True
     )
+    c_book = models.OneToOneField(CBook, on_delete=models.CASCADE)
 
     class Meta:
         unique_together = ["max_capacity", "works_for"]
 
+    def __str__(self):
+        return str(self.id) + " " + self.model_name
+
+
+@receiver(pre_save, sender=Truck)
+def my_handler(sender, **kwargs):
+    print("car about to save")
+
+
+@receiver(post_save, sender=Truck)
+def my_handler(sender, **kwargs):
+    print("car saved")
+
+
+class ShowRoom(models.Model):
+    truck_details = models.ForeignKey(Truck, on_delete=models.CASCADE)
+    description = models.CharField(null=True, blank=True, max_length=25)
+
+
+class RandomEntries(models.Model):
+    flag = models.CharField(max_length=30, blank=True, null=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['flag'], name="random_search_index", condition=Q(flag__gt=400)
+            )
+        ]
+
+
+@receiver(post_delete, sender=RandomEntries)
+def my_handler(sender, **kwargs):
+    print("car deleted")
+
+
+class FileUpload(models.Model):
+    file_field = models.FileField(
+        upload_to='media/'
+    )
